@@ -1,148 +1,118 @@
 /* Tyler Stuessi
  * Jeremy Herwig
  *
- * Problem 3: Finding targeted collisions
- * We are trying to find an n-bit targeted collison with "tylerjeremy"
- * using the algorithm described in the text.
- *
+ * Finding a targeted collision on SHA256
+ * (Using brute force attack)
  */
 
-//includes
 #include <iostream>
-#include <openssl/sha.h>
 #include <cstdlib>
 #include <cstring>
-#include <cstdio>
-#include <map>
 #include <iomanip>
+
+#include "sha256.h"
 
 using namespace std;
 
 typedef unsigned char UCHAR;
 
-const size_t HASH_SIZE = 20;
+//SHA256 returns 32 byte hashes
+const int HASH_SIZE = 32;
 
-class hash_value {
-	public:
-		hash_value() {val=NULL; size=0;}
-		hash_value(const hash_value &b) {
-			this->resize(b.size);
-			memcpy(this->val, b.val, b.size);
-		}
-		~hash_value() {
-			//cout << "got inside destructor with size = " << size << endl;
-			//cout << "got inside destructor with addres " << this << endl;
-			if(size > 0) free(val);
-			//cout << "got past free" << endl;
-		}
+//generates a random byte string to hash
+UCHAR * gen_random_uchar(UCHAR *temp, size_t n) {
+    for(int i = 0; i < n; i++) {
+        temp[i] = (UCHAR)rand();
+    }
 
-		void operator=(const hash_value &b) {
-			//cout << "got inside = with size = " << b.size << endl;
-			if(this->size > 0) {
-				free(this->val);
-				this->size = 0;
-			}
+    return temp;
+}
 
-			this->resize(b.size);
-			memcpy(this->val, b.val, b.size);
-		}
+//wrapper function to generate hash
+void gen_hash(UCHAR *input, size_t size, UCHAR *output) {
+    sha256(input, size, output);
+}
 
-		void resize(size_t n) { val=(UCHAR *)malloc(n); size = n; }
-		UCHAR *val;
-		int size;
-};
-
-ostream & operator<<(ostream &out, const hash_value &a) {
-	for(int i = 0; i < a.size; i++) {
-		cout << setw(2) << setfill('0') << hex << int(a.val[i]) << dec;
+//Make out easier to output the hash
+ostream & operator<<(ostream &out, UCHAR *temp) {
+	for(int i = 0; i < HASH_SIZE; i++) {
+		cout << setw(2) << setfill('0') << hex << int(temp[i]) << dec;
 	}
-
 	return out;
 }
 
-class hash_compare {
-	public:
-		bool operator()(const hash_value &a, const hash_value &b) const;
-};
+//convert the base to an n bit string padded with zeros
+//for comaprison purposes
+void convert_to_n_bits(int n, UCHAR *a) {
+    if(n % 8 != 0) {
+		//ugly, but this is basically a mask
+        a[n/8] = a[n/8] & ~( (1 << (8-(n%8))) -1);
+    } else {
+        a[n/8] = 0;
+    }
 
-//less than operator operator that I can pass to the map.
-//Longer strings are considered greater
-bool hash_compare::operator()(const hash_value &a, const hash_value &b) const {
-	if(a.size < b.size) {
-		return true;
-	} else if(a.size > b.size) {
-		return false;
-	} else {
-		return memcmp((void *)(a.val), (void *)(b.val), a.size) < 0;
-	}
+    memset((void *)(a+n/8+1), 0, HASH_SIZE-(n/8+1));
 }
 
-UCHAR * gen_random_uchar(size_t n) {
-	UCHAR *temp = (UCHAR *)malloc(n);
-	for(int i = 0; i < n; i++) {
-		temp[i] = (UCHAR)rand();
-	}
+//compare n bits of each string to test if they are a collision
+bool compare_n_bits(UCHAR *temp1, UCHAR *temp2, size_t hash_size, size_t n) {
+	convert_to_n_bits(n, temp1);
+	convert_to_n_bits(n, temp2);
 
-	return temp;
+	bool ret = (memcmp(temp1, temp2, hash_size) == 0);
+
+	return ret;
 }
-
-void gen_hash(UCHAR *input, size_t size, UCHAR *output) {
-	SHA256(input, size, output);
-}
-
-
-void generate_rainbow_table(map<hash_value, hash_value, hash_compare> &rainbow_table, int s, int t) {
-	hash_value SP, temp, EP;
-
-	//generate s random starting points, compute their endpoint (after t hashes) and store them
-	for(int i = 0; i < s; i++) {
-		SP.val = gen_random_uchar(HASH_SIZE);
-		SP.size = HASH_SIZE;
-
-		temp = SP;
-		EP.resize(HASH_SIZE);
-		for(int j = 0; j < t; j++) {
-			gen_hash(temp.val, temp.size, EP.val);
-			temp = EP;
-		}
-
-		rainbow_table[EP] = SP;
-	}
-}
-
-//void find_collision(map<hash_value, hash_value, hash_compare> &rainbow_table, char *starting_hash_c, int s, int t) {
 
 
 
 int main(int argc, char **argv) {
-	int n, s, t;
-	map<hash_value, hash_value, hash_compare> rainbow_table;
-	map<hash_value, hash_value, hash_compare>::iterator it;
-	char *starting_hash_c;
-
-	if(argc != 4) {
-		cout << "Usage: " << argv[0] << " num_bits s t" << endl;
-		return 0;
+	if(argc != 2) {
+		cout << "Usage: " << argv[0] << " num_bits" << endl;
+		return 1;
 	}
 
-	//get n
-	n = atoi(argv[1]);
-	s = atoi(argv[2]);
-	t = atoi(argv[3]);
+	srand(time(0));
 
-	starting_hash_c = "tylerjeremey";
+	int n = atoi(argv[1]);
 
-	generate_rainbow_table(rainbow_table, s, t);
-	/*for(it = rainbow_table.begin(); it != rainbow_table.end(); it++) {
-		cout << it->first << " " << it->second << endl;
-	}*/
-//	find_collision(rainbow_table, starting_hash_c, s, t);
+	char *starting_hash_c;
+	starting_hash_c = "tylerjeremy";
+
+	UCHAR *starting_hash = (UCHAR *)starting_hash_c;
+	UCHAR *base_hash = (UCHAR *)malloc(HASH_SIZE);
+
+	UCHAR *temp1 = (UCHAR *)malloc(HASH_SIZE);
+	UCHAR *temp2 = (UCHAR *)malloc(HASH_SIZE);
+
+	//generate starting hash
+	gen_hash(starting_hash, strlen((char *)starting_hash), base_hash);
+
+	//generate first test hash
+	gen_random_uchar(temp1, HASH_SIZE);
+	gen_hash(temp1, HASH_SIZE, temp2);
+
+	//brute force a collision
+	while(!compare_n_bits(temp2, base_hash, HASH_SIZE, n)) {
+		gen_random_uchar(temp1, HASH_SIZE);
+		gen_hash(temp1, HASH_SIZE, temp2);
+	}
+
+	cout << n << " BIT COLLISION FOUND" << endl;
+	cout << "y    = " << starting_hash_c << endl;
+	gen_hash(starting_hash, strlen((char *)starting_hash), base_hash);
+	cout << "H(y) = " << base_hash << endl;
+	cout << "x    = " << temp1 << endl;
+	gen_hash(temp1, HASH_SIZE, temp2);
+	cout << "H(x) = " << temp2 << endl;
+
+	free(base_hash);
+	free(temp1);
+	free(temp2);
+
 	return 0;
 }
 
 
-
-
-
-
+	
 

@@ -12,19 +12,24 @@
 
 #include <iostream>
 #include <stdio.h>
-#include <openssl/sha.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "sha256.h"
 
 using namespace std;
 
 typedef unsigned char UCHAR;
 
+long long num_hashes_computed = 0;
+
+const int HASH_SIZE = 32;
+
 
 //a and b are SHA256 hashes. This compares the first n bits
 //of the two hashes to see if they are the same.
 bool compare_n_bits(int n, UCHAR *a, UCHAR *b) {
-	if(memcmp(a, b, 20) == 0) {
+	if(memcmp(a, b, HASH_SIZE) == 0) {
 		return true;
 	} else {
 		return false;
@@ -36,24 +41,25 @@ void convert_to_n_bits(int n, UCHAR *a) {
 	//make sure that only the meaningful bits of the 
 	//last block are left
 	if(n % 8 != 0) {
-		a[n/8+1] = a[n/+18] & ~( (1 << (8-(n%8))) -1);
+		a[n/8] = a[n/8] & ~( (1 << (8-(n%8))) -1);
 	} else {
-		a[n/8+1] = 0;
+		a[n/8] = 0;
 	}
 
-	memset((void *)(a+n/8+2), 0, 20-(n/8+2));
+	memset((void *)(a+n/8+1), 0, HASH_SIZE-(n/8+1));
 }
 
 //generate a hash using SHA256
 //ouput must be allocated for 20 bytes
 void generate_hash(UCHAR *input, int size, UCHAR *output, int n) {
-	SHA256(input, size, output);
+	sha256(input, size, output);
 	convert_to_n_bits(n, output);
+	num_hashes_computed++;
 }
 
 //utility function to print out a hash in hex
 void print_hash(UCHAR *input) {
-	for(int i = 0; i < 20; i++) {
+	for(int i = 0; i < HASH_SIZE; i++) {
 		printf("%x",input[i]);
 	}
 	printf("\n");
@@ -76,11 +82,10 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	int n = atoi(argv[1]);
-	cout << "n = " << n<< endl;
 
 	int i, j;
 	UCHAR *starting_hash, *x, *x_prime, *temp_hash1, *temp_hash_x, *temp_hash_x_prime;
-	int hash_size = 20;
+	int hash_size = HASH_SIZE;
 	char *starting_hash_c;
 
 	//starting hash
@@ -88,11 +93,11 @@ int main(int argc, char **argv) {
 	starting_hash = (UCHAR *)starting_hash_c;
 
 	//x and x_prime allocations (alongside temp hashes)
-	x = (UCHAR *)malloc(sizeof(UCHAR)*20);
-	x_prime = (UCHAR *)malloc(sizeof(UCHAR)*20);
-	temp_hash1 = (UCHAR *)malloc(sizeof(UCHAR)*20);
-	temp_hash_x = (UCHAR *)malloc(sizeof(UCHAR)*20);
-	temp_hash_x_prime = (UCHAR *)malloc(sizeof(UCHAR)*20);
+	x = (UCHAR *)malloc(sizeof(UCHAR)*HASH_SIZE);
+	x_prime = (UCHAR *)malloc(sizeof(UCHAR)*HASH_SIZE);
+	temp_hash1 = (UCHAR *)malloc(sizeof(UCHAR)*HASH_SIZE);
+	temp_hash_x = (UCHAR *)malloc(sizeof(UCHAR)*HASH_SIZE);
+	temp_hash_x_prime = (UCHAR *)malloc(sizeof(UCHAR)*HASH_SIZE);
 
 	//unroll the first iteration of the loop 
 	//to make memory management easier
@@ -105,20 +110,20 @@ int main(int argc, char **argv) {
 	//if they match, there is a cycle somewhere
 	//else continue searching
 	for(j = 2; compare_n_bits(n, x, x_prime) == false; j++) {
-		generate_hash(x, 20, temp_hash_x, n);
-		generate_hash(x_prime, 20, temp_hash1, n);
-		generate_hash(temp_hash1, 20, temp_hash_x_prime, n);
+		generate_hash(x, HASH_SIZE, temp_hash_x, n);
+		generate_hash(x_prime, HASH_SIZE, temp_hash1, n);
+		generate_hash(temp_hash1, HASH_SIZE, temp_hash_x_prime, n);
 
 		//copy temp variables back into original variables
-		memcpy(x, temp_hash_x, 20);
-		memcpy(x_prime, temp_hash_x_prime, 20);
+		memcpy(x, temp_hash_x, HASH_SIZE);
+		memcpy(x_prime, temp_hash_x_prime, HASH_SIZE);
 	}
 
 	//actually iterate through cycle and find grouping
 	//again unroll the first iteration
-	memcpy(x_prime, x, 20);
+	memcpy(x_prime, x, HASH_SIZE);
 	generate_hash(starting_hash, strlen((char *)starting_hash), temp_hash_x, n);
-	generate_hash(x_prime, 20, temp_hash_x_prime, n);
+	generate_hash(x_prime, HASH_SIZE, temp_hash_x_prime, n);
 
 	if(compare_n_bits(n, temp_hash_x, temp_hash_x_prime)) {
 		print_results(starting_hash, x_prime, temp_hash_x, temp_hash_x_prime);
@@ -126,13 +131,15 @@ int main(int argc, char **argv) {
 	}
 
 	while(!compare_n_bits(n, temp_hash_x, temp_hash_x_prime)) {
-		memcpy(x, temp_hash_x, 20);
-		memcpy(x_prime, temp_hash_x_prime,20);
+		memcpy(x, temp_hash_x, HASH_SIZE);
+		memcpy(x_prime, temp_hash_x_prime,HASH_SIZE);
 
-		generate_hash(x, 20, temp_hash_x, n);
-		generate_hash(x_prime, 20, temp_hash_x_prime, n);
+		generate_hash(x, HASH_SIZE, temp_hash_x, n);
+		generate_hash(x_prime, HASH_SIZE, temp_hash_x_prime, n);
 	}
 
+	cout << "n = " << n<< endl;
+	cout << "num_hashes_computed = " << num_hashes_computed << endl;
 	print_results(x, x_prime, temp_hash_x, temp_hash_x_prime);
 
 	return 0;

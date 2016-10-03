@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstdlib>
+#include <cstdio>
 #include <openssl/sha.h>
 #include "sha256.h"
 
