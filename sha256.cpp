@@ -142,6 +142,15 @@ void process_chunk(HASH sha_hash, uchar *chunk) {
 
 void sha256(uchar *input, int size, uchar *output) {
 
+	h0 = 0x6a09e667;
+	h1 = 0xbb67ae85;
+	h2 = 0x3c6ef372;
+	h3 = 0xa54ff53a;
+	h4 = 0x510e527f;
+	h5 = 0x9b05688c;
+	h6 = 0x1f83d9ab;
+	h7 = 0x5be0cd19;
+
 	uint bitlen1, bitlen2, bittotal, ka, kb, num_bytes;
 	int i, j;
 
@@ -198,6 +207,9 @@ void sha256(uchar *input, int size, uchar *output) {
 	for (j=0; j < bittotal / 512; j++) {
 		process_chunk(sha_hash, data + j*64);
 	}
+
+
+	memset(output, 0, 32);
 
 	/* Append h0, ..., h7 for the output */
 	set_hash(h0, output);
